@@ -37,8 +37,12 @@ public class InvoiceController {
             @RequestParam(value = "outputFormat", defaultValue = "jpg") String outputFormat) {
         
         try {
+            log.info("收到识别请求 - 文件名: {}, 大小: {} bytes, cropPadding: {}, outputFormat: {}", 
+                file.getOriginalFilename(), file.getSize(), cropPadding, outputFormat);
+            
             // 验证文件
-            if (file.isEmpty()) {
+            if (file == null || file.isEmpty()) {
+                log.warn("文件为空或未提供");
                 return ResponseEntity.badRequest()
                     .body(ApiResponse.error(400, "文件不能为空"));
             }

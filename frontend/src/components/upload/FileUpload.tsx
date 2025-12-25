@@ -45,8 +45,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
       onSuccess?.(response);
       setFileList([]);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || error.message || '上传失败';
-      message.error(errorMsg);
+      // 优先使用 API 错误信息
+      const errorMsg = error.apiError?.message || 
+                      error.response?.data?.message || 
+                      error.message || 
+                      '上传失败';
+      console.error('上传失败详情:', error);
+      message.error(`上传失败: ${errorMsg}`);
       onError?.(error);
     } finally {
       setLoading(false);

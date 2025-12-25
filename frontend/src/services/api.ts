@@ -1,5 +1,4 @@
 import axios from 'axios';
-import type { ApiResponse } from '../types/api';
 
 // API 基础配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
@@ -9,17 +8,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60000, // 60秒超时
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  // 不设置默认 Content-Type，让 axios 根据数据类型自动设置
 });
 
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config) => {
-    // 如果数据是 FormData，删除 Content-Type 让浏览器自动设置（包含 boundary）
+    // 如果数据是 FormData，不设置 Content-Type，让浏览器自动设置（包含 boundary）
     if (config.data instanceof FormData) {
+      // 明确删除 Content-Type，让浏览器自动设置 multipart/form-data; boundary=...
       delete config.headers['Content-Type'];
+      delete config.headers['content-type'];
+    } else if (config.data && typeof config.data === 'object' && !config.headers['Content-Type']) {
+      // 非 FormData 的 JSON 请求，设置 Content-Type
+      config.headers['Content-Type'] = 'application/json';
     }
     
     // 可以在这里添加 token 等认证信息
@@ -43,9 +45,33 @@ apiClient.interceptors.response.use(
     // 统一错误处理
     if (error.response) {
       const { code, message } = error.response.data || {};
-      console.error('API 错误:', code, message);
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      console.error('API 错误:', {
+        status,
+        statusText,
+        code,
+        message,
+        data: error.response.data,
+        headers: error.response.headers
+      });
+      // 将完整的错误信息附加到 error 对象上，方便组件使用
+      error.apiError = {
+        status,
+        statusText,
+        code,
+        message: message || statusText || '请求失败'
+      };
+    } else if (error.request) {
+      console.error('网络错误: 请求已发出但没有收到响应', error.request);
+      error.apiError = {
+        message: '网络错误：无法连接到服务器'
+      };
     } else {
-      console.error('网络错误:', error.message);
+      console.error('请求配置错误:', error.message);
+      error.apiError = {
+        message: error.message || '请求配置错误'
+      };
     }
     return Promise.reject(error);
   }

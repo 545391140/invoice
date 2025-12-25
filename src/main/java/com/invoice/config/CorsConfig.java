@@ -10,7 +10,7 @@ public class CorsConfig implements WebMvcConfigurer {
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/api/**")
-            .allowedOrigins("*")  // 生产环境应该配置具体的前端域名
+            .allowedOriginPatterns("*")  // 使用 allowedOriginPatterns 替代 allowedOrigins，支持 allowCredentials
             .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .allowedHeaders("*")
             .allowCredentials(true)
