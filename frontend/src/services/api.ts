@@ -17,6 +17,11 @@ const apiClient = axios.create({
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config) => {
+    // 如果数据是 FormData，删除 Content-Type 让浏览器自动设置（包含 boundary）
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
+    
     // 可以在这里添加 token 等认证信息
     // const token = localStorage.getItem('token');
     // if (token) {
@@ -47,4 +52,5 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
+
 

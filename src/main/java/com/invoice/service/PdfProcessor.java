@@ -1,6 +1,7 @@
 package com.invoice.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.pdfbox.rendering.ImageType;
@@ -28,7 +29,7 @@ public class PdfProcessor {
     public List<byte[]> pdfToImages(String pdfPath) throws IOException {
         List<byte[]> images = new ArrayList<>();
         
-        try (PDDocument document = PDDocument.load(new File(pdfPath))) {
+        try (PDDocument document = Loader.loadPDF(new File(pdfPath))) {
             PDFRenderer pdfRenderer = new PDFRenderer(document);
             
             log.info("开始转换 PDF，共 {} 页", document.getNumberOfPages());
@@ -58,7 +59,7 @@ public class PdfProcessor {
     public List<BufferedImage> pdfToBufferedImages(String pdfPath) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         
-        try (PDDocument document = PDDocument.load(new File(pdfPath))) {
+        try (PDDocument document = Loader.loadPDF(new File(pdfPath))) {
             PDFRenderer pdfRenderer = new PDFRenderer(document);
             
             for (int pageNum = 0; pageNum < document.getNumberOfPages(); pageNum++) {
@@ -77,7 +78,7 @@ public class PdfProcessor {
     public List<BufferedImage> pdfToBufferedImages(byte[] pdfBytes) throws IOException {
         List<BufferedImage> images = new ArrayList<>();
         
-        try (PDDocument document = PDDocument.load(pdfBytes)) {
+        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
             PDFRenderer pdfRenderer = new PDFRenderer(document);
             
             for (int pageNum = 0; pageNum < document.getNumberOfPages(); pageNum++) {
@@ -90,4 +91,5 @@ public class PdfProcessor {
         return images;
     }
 }
+
 

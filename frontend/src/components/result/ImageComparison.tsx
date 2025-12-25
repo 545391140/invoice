@@ -139,3 +139,4 @@ const ImageComparison: React.FC<ImageComparisonProps> = ({ invoice, taskId }) =>
 
 export default ImageComparison;
 
+

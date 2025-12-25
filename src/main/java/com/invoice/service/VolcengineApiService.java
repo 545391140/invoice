@@ -105,7 +105,8 @@ public class VolcengineApiService {
             
             // 解析响应
             if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
-                String content = response.getChoices().get(0).getMessage().getContent();
+                Object contentObj = response.getChoices().get(0).getMessage().getContent();
+                String content = contentObj != null ? contentObj.toString() : "";
                 log.info("API 调用成功，返回内容长度: {}", content.length());
                 return content;
             } else {
@@ -164,7 +165,8 @@ public class VolcengineApiService {
             var response = arkService.createChatCompletion(request);
             
             if (response != null && response.getChoices() != null && !response.getChoices().isEmpty()) {
-                return response.getChoices().get(0).getMessage().getContent();
+                Object contentObj = response.getChoices().get(0).getMessage().getContent();
+                return contentObj != null ? contentObj.toString() : "";
             } else {
                 throw new Exception("API 返回格式异常");
             }
@@ -175,4 +177,5 @@ public class VolcengineApiService {
         }
     }
 }
+
 

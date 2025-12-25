@@ -10,7 +10,7 @@ const HomePage: React.FC = () => {
   const [processingMode, setProcessingMode] = useState<'sync' | 'async'>('sync');
 
   const handleSuccess = (response: any) => {
-    if (response.data.invoices) {
+    if (response?.data?.invoices) {
       setResult(response.data);
     }
   };
@@ -18,7 +18,7 @@ const HomePage: React.FC = () => {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Card title="发票识别与裁切" style={{ marginBottom: '24px' }}>
-        <Form form={form} layout="vertical">
+        <Form form={form} layout="vertical" onFinish={() => {}}>
           <Form.Item label="处理模式">
             <Radio.Group
               value={processingMode}

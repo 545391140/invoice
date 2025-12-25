@@ -29,6 +29,10 @@ app:
   allowed-extensions:
     pdf: pdf
     image: jpg,jpeg,png,bmp,gif
+  cleanup:
+    enabled: true
+    retention-hours: 24
+    cron: "0 0 2 * * ?"
 
 # 图像处理配置
 image:
@@ -56,13 +60,6 @@ api:
     3. 页码 (page): 图片所在的页码
     
     请以 JSON 格式返回结果。
-
-# 资源回收配置
-app:
-  cleanup:
-    enabled: true
-    retention-hours: 24
-    cron: "0 0 2 * * ?"
 
 # 日志配置
 logging:

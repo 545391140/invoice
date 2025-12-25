@@ -3,6 +3,7 @@ package com.invoice.service;
 import com.invoice.dto.InvoiceRecognizeResponse;
 import com.invoice.dto.TaskStatusResponse;
 import com.invoice.model.InvoiceInfo;
+import com.invoice.util.ApiResponseParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
+import org.springframework.mock.web.MockMultipartFile;
 
 @Slf4j
 @Service
@@ -179,13 +181,44 @@ public class InvoiceService {
         taskStatus.setCreatedAt(Instant.now().toString());
         taskStore.put(taskId, taskStatus);
         
+        // 保存文件到临时目录（因为 MultipartFile 的流在请求结束后会关闭）
+        String tempFilePath;
+        try {
+            String originalFilename = file.getOriginalFilename();
+            String extension = getFileExtension(originalFilename);
+            String tempFilename = String.format("%s_temp.%s", taskId, extension);
+            Path tempFile = tempStorageLocation.resolve(tempFilename);
+            Files.copy(file.getInputStream(), tempFile, StandardCopyOption.REPLACE_EXISTING);
+            tempFilePath = tempFile.toString();
+            log.info("已保存临时文件: {}", tempFilePath);
+        } catch (IOException e) {
+            log.error("保存临时文件失败", e);
+            taskStatus.setStatus("FAILED");
+            throw new RuntimeException("保存文件失败", e);
+        }
+        
         // 异步处理
+        final String finalTempFilePath = tempFilePath;
+        final String finalContentType = file.getContentType();
+        final String finalOriginalFilename = file.getOriginalFilename();
+        
         CompletableFuture.supplyAsync(() -> {
             try {
                 taskStatus.setStatus("PROCESSING");
                 taskStatus.setProgress(10);
                 
-                InvoiceRecognizeResponse result = recognizeAndCrop(file, cropPadding, outputFormat);
+                // 从临时文件重新创建 MultipartFile
+                Path tempFile = Paths.get(finalTempFilePath);
+                byte[] fileBytes = Files.readAllBytes(tempFile);
+                String contentType = finalContentType != null ? finalContentType : "application/octet-stream";
+                
+                // 创建临时 MultipartFile
+                MockMultipartFile tempMultipartFile = new MockMultipartFile(
+                    "file", finalOriginalFilename, contentType, fileBytes
+                );
+                
+                InvoiceRecognizeResponse result = recognizeAndCrop(
+                    tempMultipartFile, cropPadding, outputFormat);
                 
                 taskStatus.setStatus("COMPLETED");
                 taskStatus.setProgress(100);
@@ -193,11 +226,24 @@ public class InvoiceService {
                 taskStatus.setInvoices(result.getInvoices());
                 taskStatus.setCompletedAt(Instant.now().toString());
                 
+                // 清理临时文件
+                try {
+                    Files.deleteIfExists(tempFile);
+                } catch (IOException e) {
+                    log.warn("删除临时文件失败: {}", finalTempFilePath);
+                }
+                
                 return result;
             } catch (Exception e) {
                 log.error("异步任务处理失败", e);
                 taskStatus.setStatus("FAILED");
                 taskStatus.setProgress(0);
+                // 清理临时文件
+                try {
+                    Files.deleteIfExists(Paths.get(finalTempFilePath));
+                } catch (IOException ex) {
+                    log.warn("删除临时文件失败: {}", finalTempFilePath);
+                }
                 return null;
             }
         });
