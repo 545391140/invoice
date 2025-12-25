@@ -1,7 +1,33 @@
 {
   "name": "invoice-frontend",
   "version": "1.0.0",
+  "description": "发票自动识别与裁切系统前端应用",
   "type": "module",
+  "keywords": [
+    "invoice",
+    "ocr",
+    "react",
+    "typescript",
+    "vite",
+    "antd"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=7.0.0"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
