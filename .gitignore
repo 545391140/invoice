@@ -1,0 +1,49 @@
+# 配置文件（包含敏感信息）
+application-local.yml
+application-local.properties
+.env
+start-with-key.bat
+start-with-key.sh
+
+# 上传和输出文件
+uploads/*
+outputs/*
+temp/*
+logs/*
+
+# Java
+target/
+*.class
+*.jar
+*.war
+*.ear
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志
+logs/
+*.log
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Node
+node_modules/
+dist/
+build/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+

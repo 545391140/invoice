@@ -1,0 +1,76 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: invoice-service
+  profiles:
+    include: local  # 包含本地配置（如果存在）
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# 火山引擎配置
+volcengine:
+  ark-api-key: ${ARK_API_KEY:}  # 优先使用环境变量，如果没有则使用 application-local.yml
+  base-url: https://ark.cn-beijing.volces.com/api/v3
+  model:
+    name: doubao-seed-1-6-vision-250815
+
+# 应用配置
+app:
+  upload-folder: uploads
+  output-folder: outputs
+  temp-folder: temp
+  max-file-size: 52428800  # 50MB (字节)
+  allowed-extensions:
+    pdf: pdf
+    image: jpg,jpeg,png,bmp,gif
+
+# 图像处理配置
+image:
+  pdf:
+    dpi: 300
+    scale: 2.0
+  crop:
+    padding: 10
+    min-size: 100
+  output:
+    format: jpg
+    quality: 0.95
+
+# API 调用配置
+api:
+  timeout: 60
+  retry:
+    max-retries: 3
+    delay: 1000
+  prompt: |
+    请识别图片中所有发票的位置。
+    对于每张发票，请返回以下信息：
+    1. 边界框坐标 (bbox): [x1, y1, x2, y2]，单位为像素
+    2. 置信度 (confidence): 0-1之间的数值
+    3. 页码 (page): 图片所在的页码
+    
+    请以 JSON 格式返回结果。
+
+# 资源回收配置
+app:
+  cleanup:
+    enabled: true
+    retention-hours: 24
+    cron: "0 0 2 * * ?"
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.invoice: DEBUG
+  file:
+    name: logs/invoice-service.log
+    max-size: 100MB
+    max-history: 30
+
