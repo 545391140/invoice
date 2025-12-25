@@ -124,44 +124,7 @@ public class InvoiceService {
                         invoices.size(), imageWidth, imageHeight);
                     
                     // 检查并缩放坐标（如果API返回的是归一化坐标0-999/1000）
-                    for (Map<String, Object> invoice : invoices) {
-                        invoice.put("page", page);
-                        @SuppressWarnings("unchecked")
-                        List<Integer> bbox = (List<Integer>) invoice.get("bbox");
-                        if (bbox != null && bbox.size() == 4) {
-                            int x1 = bbox.get(0);
-                            int y1 = bbox.get(1);
-                            int x2 = bbox.get(2);
-                            int y2 = bbox.get(3);
-                            int maxCoord = Math.max(Math.max(x1, y1), Math.max(x2, y2));
-                            
-                            // 如果坐标范围在0-1005（允许一点点溢出），且图片尺寸大，则识别为归一化坐标
-                            if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200)) {
-                                log.info("检测到归一化坐标系统 (0-1000)，原始: {}, 图片尺寸: {}x{}", 
-                                    bbox, imageWidth, imageHeight);
-                                
-                                // 修正可能超出1000的坐标
-                                double normX1 = Math.max(0, Math.min(1000, x1)) / 1000.0;
-                                double normY1 = Math.max(0, Math.min(1000, y1)) / 1000.0;
-                                double normX2 = Math.max(0, Math.min(1000, x2)) / 1000.0;
-                                double normY2 = Math.max(0, Math.min(1000, y2)) / 1000.0;
-                                
-                                List<Integer> scaledBbox = Arrays.asList(
-                                    (int) Math.round(normX1 * imageWidth),
-                                    (int) Math.round(normY1 * imageHeight),
-                                    (int) Math.round(normX2 * imageWidth),
-                                    (int) Math.round(normY2 * imageHeight)
-                                );
-                                
-                                log.info("坐标缩放完成: 原始={} -> 归一化比例=[{},{},{},{}] -> 实际像素={}", 
-                                    bbox, normX1, normY1, normX2, normY2, scaledBbox);
-                                invoice.put("bbox", scaledBbox);
-                            } else {
-                                log.debug("识别为像素坐标: bbox={}, 图片尺寸: {}x{}", 
-                                    bbox, imageWidth, imageHeight);
-                            }
-                        }
-                    }
+                    normalizeBboxCoordinates(invoices, page, imageWidth, imageHeight);
                     
                     // 裁切发票
                     List<InvoiceInfo> pageInvoices = cropInvoicesFromImage(
@@ -194,44 +157,7 @@ public class InvoiceService {
                     invoices.size(), imageWidth, imageHeight);
                 
                 // 检查并缩放坐标（如果API返回的是归一化坐标0-999/1000）
-                for (Map<String, Object> invoice : invoices) {
-                    invoice.put("page", 1);
-                    @SuppressWarnings("unchecked")
-                    List<Integer> bbox = (List<Integer>) invoice.get("bbox");
-                    if (bbox != null && bbox.size() == 4) {
-                        int x1 = bbox.get(0);
-                        int y1 = bbox.get(1);
-                        int x2 = bbox.get(2);
-                        int y2 = bbox.get(3);
-                        int maxCoord = Math.max(Math.max(x1, y1), Math.max(x2, y2));
-                        
-                        // 如果坐标范围在0-1005（允许一点点溢出），且图片尺寸大，则识别为归一化坐标
-                        if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200)) {
-                            log.info("检测到归一化坐标系统 (0-1000)，原始: {}, 图片尺寸: {}x{}", 
-                                bbox, imageWidth, imageHeight);
-                            
-                            // 修正可能超出1000的坐标
-                            double normX1 = Math.max(0, Math.min(1000, x1)) / 1000.0;
-                            double normY1 = Math.max(0, Math.min(1000, y1)) / 1000.0;
-                            double normX2 = Math.max(0, Math.min(1000, x2)) / 1000.0;
-                            double normY2 = Math.max(0, Math.min(1000, y2)) / 1000.0;
-                            
-                            List<Integer> scaledBbox = Arrays.asList(
-                                (int) Math.round(normX1 * imageWidth),
-                                (int) Math.round(normY1 * imageHeight),
-                                (int) Math.round(normX2 * imageWidth),
-                                (int) Math.round(normY2 * imageHeight)
-                            );
-                            
-                            log.info("坐标缩放完成: 原始={} -> 归一化比例=[{},{},{},{}] -> 实际像素={}", 
-                                bbox, normX1, normY1, normX2, normY2, scaledBbox);
-                            invoice.put("bbox", scaledBbox);
-                        } else {
-                            log.debug("识别为像素坐标: bbox={}, 图片尺寸: {}x{}", 
-                                bbox, imageWidth, imageHeight);
-                        }
-                    }
-                }
+                normalizeBboxCoordinates(invoices, 1, imageWidth, imageHeight);
                 
                 // 裁切发票
                 allInvoices = cropInvoicesFromImage(image, invoices, taskId, 1, cropPadding, outputFormat);
@@ -295,6 +221,8 @@ public class InvoiceService {
                 taskStatus.setProgress(10);
                 
                 // 从临时文件重新创建 MultipartFile
+                // 注意：MockMultipartFile是spring-test包中的类，在生产代码中使用它虽然可行（实现了MultipartFile接口），
+                // 但更好的做法是创建自定义的MultipartFile实现。这里使用MockMultipartFile是为了简化代码。
                 Path tempFile = Paths.get(finalTempFilePath);
                 byte[] fileBytes = Files.readAllBytes(tempFile);
                 String contentType = finalContentType != null ? finalContentType : "application/octet-stream";
@@ -508,6 +436,57 @@ public class InvoiceService {
             return resource;
         } else {
             throw new IOException("文件不存在: " + filename);
+        }
+    }
+    
+    /**
+     * 归一化边界框坐标
+     * 如果API返回的是归一化坐标（0-1000），则转换为实际像素坐标
+     * 
+     * @param invoices 发票列表
+     * @param page 页码
+     * @param imageWidth 图片宽度
+     * @param imageHeight 图片高度
+     */
+    private void normalizeBboxCoordinates(List<Map<String, Object>> invoices, int page, 
+                                         int imageWidth, int imageHeight) {
+        for (Map<String, Object> invoice : invoices) {
+            invoice.put("page", page);
+            @SuppressWarnings("unchecked")
+            List<Integer> bbox = (List<Integer>) invoice.get("bbox");
+            if (bbox != null && bbox.size() == 4) {
+                int x1 = bbox.get(0);
+                int y1 = bbox.get(1);
+                int x2 = bbox.get(2);
+                int y2 = bbox.get(3);
+                int maxCoord = Math.max(Math.max(x1, y1), Math.max(x2, y2));
+                
+                // 如果坐标范围在0-1005（允许一点点溢出），且图片尺寸大，则识别为归一化坐标
+                if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200)) {
+                    log.info("检测到归一化坐标系统 (0-1000)，原始: {}, 图片尺寸: {}x{}", 
+                        bbox, imageWidth, imageHeight);
+                    
+                    // 修正可能超出1000的坐标
+                    double normX1 = Math.max(0, Math.min(1000, x1)) / 1000.0;
+                    double normY1 = Math.max(0, Math.min(1000, y1)) / 1000.0;
+                    double normX2 = Math.max(0, Math.min(1000, x2)) / 1000.0;
+                    double normY2 = Math.max(0, Math.min(1000, y2)) / 1000.0;
+                    
+                    List<Integer> scaledBbox = Arrays.asList(
+                        (int) Math.round(normX1 * imageWidth),
+                        (int) Math.round(normY1 * imageHeight),
+                        (int) Math.round(normX2 * imageWidth),
+                        (int) Math.round(normY2 * imageHeight)
+                    );
+                    
+                    log.info("坐标缩放完成: 原始={} -> 归一化比例=[{},{},{},{}] -> 实际像素={}", 
+                        bbox, normX1, normY1, normX2, normY2, scaledBbox);
+                    invoice.put("bbox", scaledBbox);
+                } else {
+                    log.debug("识别为像素坐标: bbox={}, 图片尺寸: {}x{}", 
+                        bbox, imageWidth, imageHeight);
+                }
+            }
         }
     }
     
