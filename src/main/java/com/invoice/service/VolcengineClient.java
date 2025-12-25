@@ -15,11 +15,9 @@ import java.util.concurrent.TimeUnit;
 public class VolcengineClient {
 
     private final ArkService arkService;
-    private final VolcengineConfig config;
 
     @Autowired
     public VolcengineClient(VolcengineConfig config) {
-        this.config = config;
         // 初始化Ark客户端
         String apiKey = config.getArkApiKey();
         String baseUrl = config.getBaseUrl();

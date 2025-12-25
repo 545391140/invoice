@@ -23,6 +23,20 @@ public class VolcengineApiService {
     private final ArkService arkService;
     private final String modelName;
     
+    private static final String DEFAULT_PROMPT = 
+        "请识别图片中所有发票或收据的位置。\n" +
+        "重要：每张发票必须返回一个完整的边界框，包含整张发票的所有内容（从最顶部的商店名称到最底部的总计/流水号）。\n" +
+        "一定要确保边界框足够宽，包含所有文字内容，不要切断左右两边的文字。\n" +
+        "边界框必须覆盖发票的完整区域，包括顶部标题、中间内容和底部总计。\n" +
+        "对于每张发票，请识别发票上的商家名称或店铺名称，并严格按照以下格式返回：\n" +
+        "商家名称 发票：<bbox>x1 y1 x2 y2</bbox>\n" +
+        "其中 bbox 格式为：左上角x坐标 左上角y坐标 右下角x坐标 右下角y坐标。\n" +
+        "重要：坐标必须使用归一化坐标系统，范围为 0 到 1000。其中 [0, 0, 1000, 1000] 代表整张图片。\n" +
+        "示例格式（使用归一化坐标0-1000）：\n" +
+        "Burger King 发票：<bbox>0 5 276 598</bbox>\n" +
+        "NUTFAKTANİSTE CATERING 发票：<bbox>275 5 544 596</bbox>\n" +
+        "每张发票一行，如果有多张发票，请分行列出。";
+    
     @Autowired
     public VolcengineApiService(VolcengineClient volcengineClient, VolcengineConfig config) {
         this.arkService = volcengineClient.getArkService();
@@ -54,19 +68,7 @@ public class VolcengineApiService {
             String imageDataUrl = "data:image/jpeg;base64," + imageBase64;
             
             // 构建 Prompt
-            String prompt = customPrompt != null ? customPrompt : 
-                "请识别图片中所有发票或收据的位置。\n" +
-                "重要：每张发票必须返回一个完整的边界框，包含整张发票的所有内容（从最顶部的商店名称到最底部的总计/流水号）。\n" +
-                "一定要确保边界框足够宽，包含所有文字内容，不要切断左右两边的文字。\n" +
-                "边界框必须覆盖发票的完整区域，包括顶部标题、中间内容和底部总计。\n" +
-                "对于每张发票，请识别发票上的商家名称或店铺名称，并严格按照以下格式返回：\n" +
-                "商家名称 发票：<bbox>x1 y1 x2 y2</bbox>\n" +
-                "其中 bbox 格式为：左上角x坐标 左上角y坐标 右下角x坐标 右下角y坐标。\n" +
-                "重要：坐标必须使用归一化坐标系统，范围为 0 到 1000。其中 [0, 0, 1000, 1000] 代表整张图片。\n" +
-                "示例格式（使用归一化坐标0-1000）：\n" +
-                "Burger King 发票：<bbox>0 5 276 598</bbox>\n" +
-                "NUTFAKTANİSTE CATERING 发票：<bbox>275 5 544 596</bbox>\n" +
-                "每张发票一行，如果有多张发票，请分行列出。";
+            String prompt = customPrompt != null ? customPrompt : DEFAULT_PROMPT;
             
             // 构建消息内容
             List<ChatCompletionContentPart> multiParts = new ArrayList<>();
@@ -126,19 +128,7 @@ public class VolcengineApiService {
             String imageBase64 = Base64.getEncoder().encodeToString(imageBytes);
             String imageDataUrl = "data:image/jpeg;base64," + imageBase64;
             
-            String prompt = customPrompt != null ? customPrompt : 
-                "请识别图片中所有发票或收据的位置。\n" +
-                "重要：每张发票必须返回一个完整的边界框，包含整张发票的所有内容（从最顶部的商店名称到最底部的总计/流水号）。\n" +
-                "一定要确保边界框足够宽，包含所有文字内容，不要切断左右两边的文字。\n" +
-                "边界框必须覆盖发票的完整区域，包括顶部标题、中间内容和底部总计。\n" +
-                "对于每张发票，请识别发票上的商家名称或店铺名称，并严格按照以下格式返回：\n" +
-                "商家名称 发票：<bbox>x1 y1 x2 y2</bbox>\n" +
-                "其中 bbox 格式为：左上角x坐标 左上角y坐标 右下角x坐标 右下角y坐标。\n" +
-                "重要：坐标必须使用归一化坐标系统，范围为 0 到 1000。其中 [0, 0, 1000, 1000] 代表整张图片。\n" +
-                "示例格式（使用归一化坐标0-1000）：\n" +
-                "Burger King 发票：<bbox>0 5 276 598</bbox>\n" +
-                "NUTFAKTANİSTE CATERING 发票：<bbox>275 5 544 596</bbox>\n" +
-                "每张发票一行，如果有多张发票，请分行列出。";
+            String prompt = customPrompt != null ? customPrompt : DEFAULT_PROMPT;
             
             List<ChatCompletionContentPart> multiParts = new ArrayList<>();
             multiParts.add(ChatCompletionContentPart.builder()
