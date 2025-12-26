@@ -29,7 +29,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(
             IllegalArgumentException e) {
-        log.warn("参数错误", e);
+        log.warn("参数错误: {}", e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ApiResponse.error(400, "参数错误: " + e.getMessage()));
     }

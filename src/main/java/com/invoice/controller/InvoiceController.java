@@ -21,6 +21,7 @@ import jakarta.servlet.http.HttpServletRequest;
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/invoice")
+// CORS 配置已在 CorsConfig 中统一处理，不需要在这里重复配置
 public class InvoiceController {
     
     @Autowired
@@ -53,8 +54,11 @@ public class InvoiceController {
             
             // 为每个发票添加预览URL和下载URL
             String taskId = response.getTaskId();
-            HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder
-                .getRequestAttributes()).getRequest();
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attributes == null) {
+                throw new IllegalStateException("无法获取请求上下文");
+            }
+            HttpServletRequest request = attributes.getRequest();
             String baseUrl = request.getScheme() + "://" + request.getServerName() 
                 + ":" + request.getServerPort() + "/api/v1/invoice";
             
@@ -137,7 +141,7 @@ public class InvoiceController {
         try {
             Resource resource = invoiceService.getOriginalImageResource(taskId, page);
             return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
+                .contentType(MediaType.valueOf("image/jpeg"))
                 .header("Cache-Control", "public, max-age=3600")
                 .body(resource);
                 
@@ -155,7 +159,7 @@ public class InvoiceController {
         try {
             Resource resource = invoiceService.getCroppedImageResource(filename);
             return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
+                .contentType(MediaType.valueOf("image/jpeg"))
                 .header("Cache-Control", "public, max-age=3600")
                 .body(resource);
                 
@@ -173,7 +177,7 @@ public class InvoiceController {
         try {
             Resource resource = invoiceService.getCroppedImageResource(filename);
             return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
+                .contentType(MediaType.valueOf("image/jpeg"))
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .body(resource);
                 
@@ -194,7 +198,7 @@ public class InvoiceController {
             Resource resource = invoiceService.getOriginalImageResource(taskId, page);
             String filename = String.format("original_page_%d.jpg", page);
             return ResponseEntity.ok()
-                .contentType(MediaType.IMAGE_JPEG)
+                .contentType(MediaType.valueOf("image/jpeg"))
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .body(resource);
                 

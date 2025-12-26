@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Form, InputNumber, Radio, Space, Divider } from 'antd';
+import { Card, Form, InputNumber, Radio, Divider } from 'antd';
 import FileUpload from '../components/upload/FileUpload';
 import InvoiceList from '../components/result/InvoiceList';
 import type { InvoiceRecognizeResponse } from '../types/api';
@@ -18,7 +18,7 @@ const HomePage: React.FC = () => {
   return (
     <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
       <Card title="发票识别与裁切" style={{ marginBottom: '24px' }}>
-        <Form form={form} layout="vertical" onFinish={() => {}}>
+        <Form form={form} layout="vertical">
           <Form.Item label="处理模式">
             <Radio.Group
               value={processingMode}

@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -135,7 +136,9 @@ public class InvoiceService {
                 // 图片处理
                 BufferedImage image = ImageIO.read(file.getInputStream());
                 if (image == null) {
-                    throw new IllegalArgumentException("无法读取图片文件");
+                    log.error("无法读取图片文件: filename={}, contentType={}, size={}", 
+                        file.getOriginalFilename(), file.getContentType(), file.getSize());
+                    throw new IllegalArgumentException("无法读取图片文件: " + file.getOriginalFilename());
                 }
                 
                 images = Collections.singletonList(image);
@@ -418,7 +421,11 @@ public class InvoiceService {
             }
         }
         
-        Resource resource = new UrlResource(filePath.toUri());
+        URI uri = filePath.toUri();
+        if (uri == null) {
+            throw new IOException("无法创建文件URI: " + filePath);
+        }
+        Resource resource = new UrlResource(uri);
         if (resource.exists()) {
             return resource;
         } else {
@@ -431,7 +438,11 @@ public class InvoiceService {
      */
     public Resource getCroppedImageResource(String filename) throws IOException {
         Path filePath = croppedStorageLocation.resolve(filename).normalize();
-        Resource resource = new UrlResource(filePath.toUri());
+        URI uri = filePath.toUri();
+        if (uri == null) {
+            throw new IOException("无法创建文件URI: " + filePath);
+        }
+        Resource resource = new UrlResource(uri);
         if (resource.exists()) {
             return resource;
         } else {
