@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -23,6 +24,9 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriter;
 import javax.imageio.ImageWriteParam;
@@ -45,6 +49,9 @@ public class InvoiceService {
     
     // 异步任务存储（生产环境应使用Redis或数据库）
     private final Map<String, TaskStatusResponse> taskStore = new ConcurrentHashMap<>();
+    
+    // 并行处理线程池（限制并发数为1，因为API有严格的限流和配额限制）
+    private final ExecutorService executorService = Executors.newFixedThreadPool(1);
     
     @Autowired
     public InvoiceService(
@@ -80,11 +87,34 @@ public class InvoiceService {
     public InvoiceRecognizeResponse recognizeAndCrop(MultipartFile file, 
                                                     int cropPadding, 
                                                     String outputFormat) throws Exception {
+        return recognizeAndCrop(file, cropPadding, outputFormat, null);
+    }
+
+    /**
+     * 同步识别与裁切发票（支持指定 taskId）
+     */
+    public InvoiceRecognizeResponse recognizeAndCrop(MultipartFile file, 
+                                                    int cropPadding, 
+                                                    String outputFormat,
+                                                    String existingTaskId) throws Exception {
         long startTime = System.currentTimeMillis();
-        String taskId = UUID.randomUUID().toString();
+        String taskId = (existingTaskId != null && !existingTaskId.isEmpty()) 
+            ? existingTaskId 
+            : UUID.randomUUID().toString();
         
         log.info("开始处理文件: {}, taskId: {}", file.getOriginalFilename(), taskId);
         
+        // 如果是新任务，创建一个任务状态记录
+        boolean isNewTask = existingTaskId == null || existingTaskId.isEmpty();
+        if (isNewTask) {
+            TaskStatusResponse taskStatus = new TaskStatusResponse();
+            taskStatus.setTaskId(taskId);
+            taskStatus.setStatus("PROCESSING");
+            taskStatus.setProgress(10);
+            taskStatus.setCreatedAt(Instant.now().toString());
+            taskStore.put(taskId, taskStatus);
+        }
+
         try {
             // 1. 保存原始文件
             String originalFilename = saveOriginalFile(file, taskId);
@@ -98,49 +128,108 @@ public class InvoiceService {
                 // PDF 处理
                 String pdfPath = originalStorageLocation.resolve(originalFilename).toString();
                 images = pdfProcessor.pdfToBufferedImages(pdfPath);
+                int totalPages = images.size();
                 
+                // 更新任务状态的总页数
+                TaskStatusResponse taskStatus = taskStore.get(taskId);
+                if (taskStatus != null) {
+                    taskStatus.setTotalPages(totalPages);
+                    taskStatus.setStatusMessage("正在初始化，共 " + totalPages + " 页...");
+                }
+
                 // 保存PDF转换后的图片
                 for (int i = 0; i < images.size(); i++) {
                     byte[] imageBytes = bufferedImageToBytes(images.get(i));
                     saveOriginalImage(imageBytes, taskId, i + 1);
                 }
                 
-                // 处理每一页
+                AtomicInteger completedPages = new AtomicInteger(0);
+                List<CompletableFuture<List<InvoiceInfo>>> futures = new ArrayList<>();
+
+                // 并行处理每一页
                 for (int pageIndex = 0; pageIndex < images.size(); pageIndex++) {
-                    BufferedImage image = images.get(pageIndex);
-                    int page = pageIndex + 1;
+                    final int page = pageIndex + 1;
+                    final BufferedImage image = images.get(pageIndex);
                     
-                    // 保存临时图片用于API调用
-                    String tempImagePath = saveTempImage(image, taskId, page);
+                    CompletableFuture<List<InvoiceInfo>> future = CompletableFuture.supplyAsync(() -> {
+                        try {
+                            log.info("开始处理第 {} 页，任务ID: {}", page, taskId);
+                            
+                            // 更新当前页码信息
+                            TaskStatusResponse currentStatus = taskStore.get(taskId);
+                            if (currentStatus != null) {
+                                currentStatus.setCurrentPage(page);
+                                currentStatus.setStatusMessage("正在识别第 " + page + "/" + totalPages + " 页...");
+                            }
+
+                            // 保存临时图片用于API调用
+                            String tempImagePath = saveTempImage(image, taskId, page);
+                            
+                            // 从临时图片文件读取图片，确保与API看到的图片完全一致
+                            BufferedImage tempImage = ImageIO.read(new File(tempImagePath));
+                            if (tempImage == null) {
+                                throw new IOException("无法读取临时图片文件: " + tempImagePath);
+                            }
+                            
+                            // 调用API识别
+                            int imageWidth = tempImage.getWidth();
+                            int imageHeight = tempImage.getHeight();
+                            String apiResponse = apiService.callVolcengineVisionApi(tempImagePath, page);
+                            
+                            // 解析API响应
+                            List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse, page);
+                            
+                            // 检查并缩放坐标
+                            normalizeBboxCoordinates(invoices, page, imageWidth, imageHeight);
+                            
+                            // 生成图片唯一ID
+                            String imageId = String.format("%s_%d", taskId, page);
+                            
+                            // 裁切发票
+                            List<InvoiceInfo> pageInvoices = cropInvoicesFromImage(
+                                tempImage, invoices, taskId, imageId, page, cropPadding, outputFormat);
+                            
+                            // 更新进度
+                            int done = completedPages.incrementAndGet();
+                            if (currentStatus != null) {
+                                // 进度从 10% 到 90%
+                                int progress = 10 + (int)((double)done / totalPages * 80);
+                                currentStatus.setProgress(progress);
+                                currentStatus.setStatusMessage("已完成 " + done + "/" + totalPages + " 页的识别");
+                            }
+                            
+                            return pageInvoices;
+                        } catch (Exception e) {
+                            log.error("处理第 {} 页失败: {}", page, e.getMessage());
+                            return Collections.emptyList();
+                        }
+                    }, executorService);
                     
-                    // 调用API识别
-                    int imageWidth = image.getWidth();
-                    int imageHeight = image.getHeight();
-                    log.info("调用API识别，使用临时图片: {}, BufferedImage尺寸: {}x{}, 页码: {}", 
-                        tempImagePath, imageWidth, imageHeight, page);
-                    String apiResponse = apiService.callVolcengineVisionApi(tempImagePath);
-                    List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse);
-                    
-                    log.info("API返回发票数量: {}, 用于裁切的BufferedImage尺寸: {}x{} (应与API识别的图片尺寸一致)", 
-                        invoices.size(), imageWidth, imageHeight);
-                    
-                    // 检查并缩放坐标（如果API返回的是归一化坐标0-999/1000）
-                    normalizeBboxCoordinates(invoices, page, imageWidth, imageHeight);
-                    
-                    // 裁切发票
-                    List<InvoiceInfo> pageInvoices = cropInvoicesFromImage(
-                        image, invoices, taskId, page, cropPadding, outputFormat);
-                    allInvoices.addAll(pageInvoices);
+                    futures.add(future);
+                }
+                
+                // 等待所有页面处理完成
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+                
+                // 汇总结果
+                for (CompletableFuture<List<InvoiceInfo>> future : futures) {
+                    allInvoices.addAll(future.get());
                 }
             } else {
                 // 图片处理
                 BufferedImage image = ImageIO.read(file.getInputStream());
                 if (image == null) {
-                    log.error("无法读取图片文件: filename={}, contentType={}, size={}", 
-                        file.getOriginalFilename(), file.getContentType(), file.getSize());
                     throw new IllegalArgumentException("无法读取图片文件: " + file.getOriginalFilename());
                 }
                 
+                // 更新任务状态
+                TaskStatusResponse taskStatus = taskStore.get(taskId);
+                if (taskStatus != null) {
+                    taskStatus.setTotalPages(1);
+                    taskStatus.setCurrentPage(1);
+                    taskStatus.setStatusMessage("正在识别图片内容...");
+                }
+
                 images = Collections.singletonList(image);
                 byte[] imageBytes = bufferedImageToBytes(image);
                 saveOriginalImage(imageBytes, taskId, 1);
@@ -148,22 +237,34 @@ public class InvoiceService {
                 // 保存临时图片
                 String tempImagePath = saveTempImage(image, taskId, 1);
                 
+                // 从临时图片文件读取图片
+                BufferedImage tempImage = ImageIO.read(new File(tempImagePath));
+                if (tempImage == null) {
+                    throw new IOException("无法读取临时图片文件: " + tempImagePath);
+                }
+                
                 // 调用API识别
-                int imageWidth = image.getWidth();
-                int imageHeight = image.getHeight();
-                log.info("调用API识别，使用临时图片: {}, BufferedImage尺寸: {}x{}", 
-                    tempImagePath, imageWidth, imageHeight);
-                String apiResponse = apiService.callVolcengineVisionApi(tempImagePath);
-                List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse);
+                int imageWidth = tempImage.getWidth();
+                int imageHeight = tempImage.getHeight();
+                String apiResponse = apiService.callVolcengineVisionApi(tempImagePath, 1);
                 
-                log.info("API返回发票数量: {}, 用于裁切的BufferedImage尺寸: {}x{} (应与API识别的图片尺寸一致)", 
-                    invoices.size(), imageWidth, imageHeight);
+                // 解析API响应
+                List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse, 1);
                 
-                // 检查并缩放坐标（如果API返回的是归一化坐标0-999/1000）
+                // 进度更新到 50%
+                if (taskStatus != null) {
+                    taskStatus.setProgress(50);
+                    taskStatus.setStatusMessage("已完成内容识别，正在裁切...");
+                }
+
+                // 检查并缩放坐标
                 normalizeBboxCoordinates(invoices, 1, imageWidth, imageHeight);
                 
+                // 生成图片唯一ID
+                String imageId = String.format("%s_%d", taskId, 1);
+                
                 // 裁切发票
-                allInvoices = cropInvoicesFromImage(image, invoices, taskId, 1, cropPadding, outputFormat);
+                allInvoices = cropInvoicesFromImage(tempImage, invoices, taskId, imageId, 1, cropPadding, outputFormat);
             }
             
             // 构建响应
@@ -176,10 +277,26 @@ public class InvoiceService {
             log.info("处理完成，识别到 {} 张发票，耗时: {} 秒", 
                 allInvoices.size(), response.getProcessingTime());
             
+            // 更新任务状态为已完成
+            TaskStatusResponse taskStatus = taskStore.get(taskId);
+            if (taskStatus != null) {
+                taskStatus.setStatus("COMPLETED");
+                taskStatus.setProgress(100);
+                taskStatus.setTotalInvoices(allInvoices.size());
+                taskStatus.setInvoices(allInvoices);
+                taskStatus.setCompletedAt(Instant.now().toString());
+            }
+            
             return response;
             
         } catch (Exception e) {
             log.error("处理失败", e);
+            // 更新任务状态为失败
+            TaskStatusResponse taskStatus = taskStore.get(taskId);
+            if (taskStatus != null) {
+                taskStatus.setStatus("FAILED");
+                taskStatus.setProgress(0);
+            }
             throw e;
         }
     }
@@ -236,17 +353,11 @@ public class InvoiceService {
                 );
                 
                 InvoiceRecognizeResponse result = recognizeAndCrop(
-                    tempMultipartFile, cropPadding, outputFormat);
-                
-                taskStatus.setStatus("COMPLETED");
-                taskStatus.setProgress(100);
-                taskStatus.setTotalInvoices(result.getTotalInvoices());
-                taskStatus.setInvoices(result.getInvoices());
-                taskStatus.setCompletedAt(Instant.now().toString());
+                    tempMultipartFile, cropPadding, outputFormat, taskId);
                 
                 // 清理临时文件
                 try {
-                    Files.deleteIfExists(tempFile);
+                    Files.deleteIfExists(Paths.get(finalTempFilePath));
                 } catch (IOException e) {
                     log.warn("删除临时文件失败: {}", finalTempFilePath);
                 }
@@ -282,16 +393,28 @@ public class InvoiceService {
     
     /**
      * 从图片中裁切多张发票
+     * 
+     * @param image 要裁切的图片
+     * @param invoices 发票列表（包含坐标信息）
+     * @param taskId 任务ID
+     * @param imageId 图片唯一ID（格式：taskId_page）
+     * @param page 页码
+     * @param padding 边距
+     * @param outputFormat 输出格式
+     * @return 发票信息列表
      */
     private List<InvoiceInfo> cropInvoicesFromImage(BufferedImage image,
                                                    List<Map<String, Object>> invoices,
                                                    String taskId,
+                                                   String imageId,
                                                    int page,
                                                    int padding,
                                                    String outputFormat) throws IOException {
         List<InvoiceInfo> result = new ArrayList<>();
-        log.debug("开始裁切发票，图片尺寸: {}x{}, 发票数量: {}", 
-            image.getWidth(), image.getHeight(), invoices.size());
+        int imageWidth = image.getWidth();
+        int imageHeight = image.getHeight();
+        log.info("开始裁切发票，图片ID: {}, 图片尺寸: {}x{}, 发票数量: {}", 
+            imageId, imageWidth, imageHeight, invoices.size());
         
         for (int idx = 0; idx < invoices.size(); idx++) {
             Map<String, Object> invoiceData = invoices.get(idx);
@@ -301,22 +424,26 @@ public class InvoiceService {
                 Double confidence = (Double) invoiceData.getOrDefault("confidence", 0.9);
                 String merchantName = (String) invoiceData.getOrDefault("merchantName", null);
                 
-                // 裁切发票
-                String filename = String.format("invoice_%d_%d.%s", page, idx, outputFormat);
+                int invoicePage = (Integer) invoiceData.getOrDefault("page", page);
+                log.info("准备裁切发票 {} (页码 {}): bbox={}, 图片尺寸={}x{}, padding={}, 图片ID={}", 
+                    idx, invoicePage, bbox, imageWidth, imageHeight, padding, imageId);
+                
+                // 生成文件名：{图片唯一ID}_invoice_{页码}_{索引}.{格式}
+                String filename = String.format("%s_invoice_%d_%d.%s", imageId, page, idx, outputFormat);
                 String outputPath = croppedStorageLocation.resolve(filename).toString();
                 
                 BufferedImage cropped = imageCropService.cropInvoice(image, bbox, padding, outputPath);
-                log.debug("裁切完成: 发票索引={}, 文件名={}, 裁切后尺寸={}x{}", 
-                    idx, filename, cropped.getWidth(), cropped.getHeight());
+                log.info("裁切完成: 图片ID={}, 发票索引={}, 文件名={}, 裁切后尺寸={}x{}", 
+                    imageId, idx, filename, cropped.getWidth(), cropped.getHeight());
                 
                 // 创建发票信息
                 InvoiceInfo invoiceInfo = new InvoiceInfo();
                 invoiceInfo.setIndex(idx);
-                invoiceInfo.setPage(page);
+                invoiceInfo.setPage(invoicePage);  // 使用API返回的页码
                 invoiceInfo.setBbox(bbox);
                 invoiceInfo.setConfidence(confidence);
                 invoiceInfo.setMerchantName(merchantName);
-                invoiceInfo.setFilename(filename);
+                invoiceInfo.setFilename(filename);  // 使用实际生成的文件名
                 
                 result.add(invoiceInfo);
                 
@@ -359,6 +486,9 @@ public class InvoiceService {
         // 记录图片尺寸，确保用于API的图片和用于裁切的图片尺寸一致
         log.debug("保存临时图片: {}, 尺寸: {}x{}", filename, image.getWidth(), image.getHeight());
         
+        // 转换为标准RGB格式，避免颜色空间问题
+        BufferedImage rgbImage = convertToRGB(image);
+        
         // 使用高质量保存，避免压缩导致尺寸变化
         ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
         ImageWriteParam param = writer.getDefaultWriteParam();
@@ -369,7 +499,7 @@ public class InvoiceService {
         
         try (FileImageOutputStream output = new FileImageOutputStream(targetLocation.toFile())) {
             writer.setOutput(output);
-            writer.write(null, new IIOImage(image, null, null), param);
+            writer.write(null, new IIOImage(rgbImage, null, null), param);
         } finally {
             writer.dispose();
         }
@@ -397,11 +527,59 @@ public class InvoiceService {
     
     /**
      * BufferedImage 转字节数组
+     * 确保图片转换为标准RGB格式，避免颜色空间问题，并使用最高质量保存
      */
     private byte[] bufferedImageToBytes(BufferedImage image) throws IOException {
+        // 转换为标准RGB格式，避免颜色空间问题
+        BufferedImage rgbImage = convertToRGB(image);
         java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-        ImageIO.write(image, "jpg", baos);
+        
+        // 使用最高质量保存
+        ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+        ImageWriteParam param = writer.getDefaultWriteParam();
+        if (param.canWriteCompressed()) {
+            param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            param.setCompressionQuality(1.0f); // 最高质量
+        }
+        
+        try (javax.imageio.stream.ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+            writer.setOutput(ios);
+            writer.write(null, new IIOImage(rgbImage, null, null), param);
+        } finally {
+            writer.dispose();
+        }
+        
         return baos.toByteArray();
+    }
+    
+    /**
+     * 将BufferedImage转换为标准RGB格式
+     * 解决"Bogus input colorspace"错误
+     */
+    private BufferedImage convertToRGB(BufferedImage image) {
+        // 如果已经是RGB格式，直接返回
+        if (image.getType() == BufferedImage.TYPE_INT_RGB) {
+            return image;
+        }
+        
+        // 创建标准RGB格式的BufferedImage
+        BufferedImage rgbImage = new BufferedImage(
+            image.getWidth(), 
+            image.getHeight(), 
+            BufferedImage.TYPE_INT_RGB
+        );
+        
+        // 将原图绘制到RGB图片上
+        java.awt.Graphics2D g = rgbImage.createGraphics();
+        try {
+            g.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, 
+                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(image, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        
+        return rgbImage;
     }
     
     /**

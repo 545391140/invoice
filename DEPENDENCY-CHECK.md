@@ -71,3 +71,4 @@ mvn dependency:tree | grep -E "volcengine|pdfbox|okhttp|jackson"
 ✅ **项目配置完整，可以正常编译和运行**
 ⚠️ **OpenCV未安装，但这是正常的（项目使用BufferedImage）**
 
+

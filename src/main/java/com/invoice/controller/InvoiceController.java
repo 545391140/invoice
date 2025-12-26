@@ -124,8 +124,12 @@ public class InvoiceController {
             TaskStatusResponse response = invoiceService.getTaskStatus(taskId);
             return ResponseEntity.ok(ApiResponse.success(response));
             
+        } catch (IllegalArgumentException e) {
+            log.warn("任务不存在: taskId={}, error={}", taskId, e.getMessage());
+            return ResponseEntity.status(404)
+                .body(ApiResponse.error(404, "任务不存在: " + taskId));
         } catch (Exception e) {
-            log.error("查询任务状态失败", e);
+            log.error("查询任务状态失败: taskId={}, error={}", taskId, e.getMessage(), e);
             return ResponseEntity.status(500)
                 .body(ApiResponse.error(500, "查询失败: " + e.getMessage()));
         }
@@ -146,8 +150,9 @@ public class InvoiceController {
                 .body(resource);
                 
         } catch (Exception e) {
-            log.error("预览原始图片失败", e);
-            return ResponseEntity.notFound().build();
+            log.error("预览原始图片失败: taskId={}, page={}, error={}", taskId, page, e.getMessage());
+            return ResponseEntity.status(404)
+                .body(null);
         }
     }
     

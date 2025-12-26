@@ -30,3 +30,4 @@ Write-Host "3. After installation, run this command to configure:" -ForegroundCo
 Write-Host "   .\configure-jdk-17.0.15.ps1" -ForegroundColor Cyan
 Write-Host ""
 
+

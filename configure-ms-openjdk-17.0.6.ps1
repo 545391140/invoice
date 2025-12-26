@@ -124,3 +124,4 @@ Write-Host "  openjdk version `"17.0.6`" 2024-XX-XX" -ForegroundColor Gray
 Write-Host "  OpenJDK Runtime Environment Microsoft-17.0.6+XX" -ForegroundColor Gray
 Write-Host ""
 
+

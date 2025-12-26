@@ -46,3 +46,4 @@ try {
     Write-Host "Please download manually from: https://maven.apache.org/download.cgi" -ForegroundColor Yellow
 }
 
+

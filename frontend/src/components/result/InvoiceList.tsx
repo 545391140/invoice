@@ -14,6 +14,22 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ invoices, taskId }) => {
   const [previewImage, setPreviewImage] = useState<string>('');
   const [previewTitle, setPreviewTitle] = useState<string>('');
 
+  // 调试日志
+  React.useEffect(() => {
+    console.log('InvoiceList 接收到的数据:', { invoices, taskId, invoicesCount: invoices?.length });
+    if (invoices && invoices.length > 0) {
+      invoices.forEach((invoice, index) => {
+        console.log(`发票 ${index}:`, {
+          index: invoice.index,
+          page: invoice.page,
+          filename: invoice.filename,
+          imageUrl: invoice.imageUrl,
+          downloadUrl: invoice.downloadUrl,
+        });
+      });
+    }
+  }, [invoices, taskId]);
+
   const handleDownload = (filename: string, downloadUrl?: string) => {
     const url = downloadUrl || invoiceService.getCroppedImageDownloadUrl(filename);
     window.open(url, '_blank');
@@ -24,6 +40,10 @@ const InvoiceList: React.FC<InvoiceListProps> = ({ invoices, taskId }) => {
     setPreviewTitle(title);
     setPreviewVisible(true);
   };
+
+  if (!invoices || invoices.length === 0) {
+    return <div>没有识别到发票</div>;
+  }
 
   return (
     <>

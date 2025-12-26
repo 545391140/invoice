@@ -9,6 +9,9 @@ public class TaskStatusResponse {
     private String taskId;
     private String status;
     private Integer progress;
+    private Integer currentPage;
+    private Integer totalPages;
+    private String statusMessage;
     private Integer totalInvoices;
     private List<InvoiceInfo> invoices;
     private String createdAt;

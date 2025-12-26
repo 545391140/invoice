@@ -33,6 +33,9 @@ export interface TaskStatusResponse {
   taskId: string;
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   progress: number;
+  currentPage?: number;
+  totalPages?: number;
+  statusMessage?: string;
   totalInvoices?: number;
   invoices?: InvoiceInfo[];
   createdAt: string;

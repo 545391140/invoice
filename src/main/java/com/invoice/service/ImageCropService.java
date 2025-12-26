@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -120,17 +122,20 @@ public class ImageCropService {
                 Files.createDirectories(outputDir);
             }
             
-            // 使用高质量保存，避免压缩导致质量损失
+            // 转换为标准RGB格式，避免颜色空间问题
+            BufferedImage rgbCropped = convertToRGB(cropped);
+            
+            // 使用最高质量保存，避免压缩导致质量损失
             ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
             ImageWriteParam param = writer.getDefaultWriteParam();
             if (param.canWriteCompressed()) {
                 param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-                param.setCompressionQuality(0.95f); // 高质量，但不影响尺寸
+                param.setCompressionQuality(1.0f); // 最高质量
             }
             
             try (FileImageOutputStream output = new FileImageOutputStream(new File(outputPath))) {
                 writer.setOutput(output);
-                writer.write(null, new IIOImage(cropped, null, null), param);
+                writer.write(null, new IIOImage(rgbCropped, null, null), param);
             } finally {
                 writer.dispose();
             }
@@ -152,6 +157,36 @@ public class ImageCropService {
         }
         
         return cropped;
+    }
+    
+    /**
+     * 将BufferedImage转换为标准RGB格式
+     * 解决"Bogus input colorspace"错误
+     */
+    private BufferedImage convertToRGB(BufferedImage image) {
+        // 如果已经是RGB格式，直接返回
+        if (image.getType() == BufferedImage.TYPE_INT_RGB) {
+            return image;
+        }
+        
+        // 创建标准RGB格式的BufferedImage
+        BufferedImage rgbImage = new BufferedImage(
+            image.getWidth(), 
+            image.getHeight(), 
+            BufferedImage.TYPE_INT_RGB
+        );
+        
+        // 将原图绘制到RGB图片上
+        Graphics2D g = rgbImage.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, 
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(image, 0, 0, null);
+        } finally {
+            g.dispose();
+        }
+        
+        return rgbImage;
     }
     
     /**

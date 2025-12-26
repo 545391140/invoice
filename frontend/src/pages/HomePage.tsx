@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Card, Form, InputNumber, Radio, Divider } from 'antd';
+import { Card, Form, InputNumber, Radio, Divider, message } from 'antd';
 import FileUpload from '../components/upload/FileUpload';
 import InvoiceList from '../components/result/InvoiceList';
 import type { InvoiceRecognizeResponse } from '../types/api';
+import { saveTask } from '../utils/taskStorage';
 
 const HomePage: React.FC = () => {
   const [form] = Form.useForm();
@@ -10,13 +11,47 @@ const HomePage: React.FC = () => {
   const [processingMode, setProcessingMode] = useState<'sync' | 'async'>('sync');
 
   const handleSuccess = (response: any) => {
-    if (response?.data?.invoices) {
-      setResult(response.data);
+    console.log('收到响应数据:', response);
+    // 响应拦截器已经返回了 response.data，所以这里 response 就是 ApiResponse
+    // ApiResponse 的结构: { code, message, data: InvoiceRecognizeResponse, timestamp }
+    
+    // 检查响应是否有效
+    if (!response || response.code !== 200) {
+      console.warn('响应无效:', response);
+      return;
+    }
+    
+    const invoiceData = response.data;
+    if (invoiceData?.invoices && invoiceData.invoices.length > 0) {
+      console.log('设置结果，发票数量:', invoiceData.invoices.length);
+      setResult(invoiceData);
+      
+      // 保存任务到localStorage（包含完整的发票数据）
+      if (invoiceData.taskId) {
+        saveTask({
+          taskId: invoiceData.taskId,
+          status: 'COMPLETED',
+          totalInvoices: invoiceData.totalInvoices,
+          createdAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          invoices: invoiceData.invoices, // 保存发票列表，这样任务列表可以直接显示
+        });
+        message.success(`成功识别到 ${invoiceData.totalInvoices} 张发票，已保存到任务列表`);
+      }
+    } else {
+      console.warn('响应中没有发票数据:', response);
+      setResult({
+        taskId: invoiceData?.taskId || 'unknown',
+        totalInvoices: 0,
+        invoices: [],
+        processingTime: invoiceData?.processingTime || 0
+      });
+      message.warning('未识别到发票内容，可能是因为图片不清晰或格式特殊。建议检查文件后重试。');
     }
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <Card title="发票识别与裁切" style={{ marginBottom: '24px' }}>
         <Form form={form} layout="vertical">
           <Form.Item label="处理模式">

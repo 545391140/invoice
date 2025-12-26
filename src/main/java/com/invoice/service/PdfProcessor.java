@@ -13,6 +13,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import javax.imageio.ImageIO;
+import javax.imageio.ImageWriter;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.IIOImage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,9 +43,22 @@ public class PdfProcessor {
                 BufferedImage image = pdfRenderer.renderImageWithDPI(
                     pageNum, dpi, ImageType.RGB);
                 
-                // 转换为字节流
+                // 转换为字节流，使用最高质量保存
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(image, "jpg", baos);
+                ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+                ImageWriteParam param = writer.getDefaultWriteParam();
+                if (param.canWriteCompressed()) {
+                    param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                    param.setCompressionQuality(1.0f); // 最高质量
+                }
+                
+                try (javax.imageio.stream.ImageOutputStream ios = ImageIO.createImageOutputStream(baos)) {
+                    writer.setOutput(ios);
+                    writer.write(null, new IIOImage(image, null, null), param);
+                } finally {
+                    writer.dispose();
+                }
+                
                 images.add(baos.toByteArray());
                 
                 log.info("已转换第 {} 页，图片大小: {} bytes", pageNum + 1, baos.size());

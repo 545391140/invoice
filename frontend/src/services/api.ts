@@ -1,13 +1,14 @@
 import axios from 'axios';
 
 // API 基础配置
+// 使用相对路径以利用 Vite 代理，避免 CORS 问题
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
-  'http://localhost:8080/api/v1/invoice';
+  '/api/v1/invoice';
 
 // 创建 axios 实例
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60秒超时
+  timeout: 120000, // 120秒超时（API调用可能需要较长时间，特别是处理大文件或多页PDF时）
   // 不设置默认 Content-Type，让 axios 根据数据类型自动设置
 });
 
@@ -64,9 +65,16 @@ apiClient.interceptors.response.use(
       };
     } else if (error.request) {
       console.error('网络错误: 请求已发出但没有收到响应', error.request);
-      error.apiError = {
-        message: '网络错误：无法连接到服务器'
-      };
+      // 检查是否是超时错误
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        error.apiError = {
+          message: '请求超时：处理时间过长，请尝试使用异步模式或稍后重试'
+        };
+      } else {
+        error.apiError = {
+          message: '网络错误：无法连接到服务器'
+        };
+      }
     } else {
       console.error('请求配置错误:', error.message);
       error.apiError = {
