@@ -4,7 +4,7 @@ echo "Starting Invoice Service with Java..."
 echo ""
 
 # Set API Key
-export ARK_API_KEY=de7e4292-2a15-4f5c-ae7c-2553c555fea8
+export ARK_API_KEY=sk-awaO6Dt5bDW2OTiRJotWuZvtkaIwnYIwAzi0Bwx49MzlZgJz
 
 # Check if JAR exists
 if [ ! -f "target/invoice-service-1.0.0.jar" ]; then

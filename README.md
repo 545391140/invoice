@@ -409,7 +409,7 @@ axios.post('http://localhost:8080/api/v1/invoice/recognize-and-crop', formData, 
 ```yaml
 volcengine:
   ark-api-key: ${ARK_API_KEY}
-  base-url: https://ark.cn-beijing.volces.com/api/v3
+  base-url: https://uniapi.ruijie.com.cn/v1
   model:
     name: doubao-seed-1-6-vision-250815
 

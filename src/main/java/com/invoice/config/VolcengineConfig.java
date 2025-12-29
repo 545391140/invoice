@@ -9,8 +9,8 @@ import org.springframework.context.annotation.Configuration;
 @Data
 public class VolcengineConfig {
     private String arkApiKey;
-    private String baseUrl = "https://ark.cn-beijing.volces.com/api/v3";
-    private ModelConfig model;
+    private String baseUrl = "https://uniapi.ruijie.com.cn/v1";
+    private ModelConfig model = new ModelConfig();
 
     public String getArkApiKey() {
         // 优先从环境变量读取
@@ -24,6 +24,10 @@ public class VolcengineConfig {
         private String name = "doubao-seed-1-6-vision-250815";
     }
 }
+
+
+
+
 
 
 

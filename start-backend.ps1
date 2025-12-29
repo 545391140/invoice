@@ -5,7 +5,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # Set API Key
-$env:ARK_API_KEY = "de7e4292-2a15-4f5c-ae7c-2553c555fea8"
+$env:ARK_API_KEY = "sk-awaO6Dt5bDW2OTiRJotWuZvtkaIwnYIwAzi0Bwx49MzlZgJz"
 
 # Configure Java and Maven paths
 $env:JAVA_HOME = "C:\Program Files\Microsoft\jdk-17.0.6.10-hotspot"

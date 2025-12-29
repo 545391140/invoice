@@ -650,9 +650,12 @@ public class InvoiceService {
                 int y2 = bbox.get(3);
                 int maxCoord = Math.max(Math.max(x1, y1), Math.max(x2, y2));
                 
-                // 如果坐标范围在0-1005（允许一点点溢出），且图片尺寸大，则识别为归一化坐标
-                if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200)) {
-                    log.info("检测到归一化坐标系统 (0-1000)，原始: {}, 图片尺寸: {}x{}", 
+                // 如果坐标范围在0-1005（允许一点点溢出），且满足以下任一条件，则识别为归一化坐标：
+                // 1. 图片尺寸较大（典型的大图归一化场景）
+                // 2. 坐标值已经超出了图片的实际像素边界（强有力的归一化证据）
+                if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200 || x2 > imageWidth || y2 > imageHeight)) {
+                    log.info("检测到归一化坐标系统 (0-1000)，触发原因: {}，原始: {}, 图片尺寸: {}x{}", 
+                        (x2 > imageWidth || y2 > imageHeight) ? "坐标越界" : "大图识别",
                         bbox, imageWidth, imageHeight);
                     
                     // 修正可能超出1000的坐标
