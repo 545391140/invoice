@@ -2,7 +2,6 @@ import apiClient from './api';
 import type { 
   ApiResponse, 
   InvoiceRecognizeResponse, 
-  InvoiceInfo,
   AsyncTaskResponse,
   TaskStatusResponse,
   HealthResponse

@@ -4,7 +4,7 @@ import { EyeOutlined, DownloadOutlined, DeleteOutlined, ReloadOutlined, FileImag
 import invoiceService from '../../services/invoiceService';
 import InvoiceList from '../result/InvoiceList';
 import type { TaskStatusResponse, InvoiceInfo } from '../../types/api';
-import { deleteTask as removeTask, updateTaskStatus, getAllTasks, StoredTask } from '../../utils/taskStorage';
+import { deleteTask as removeTask, updateTaskStatus, getAllTasks } from '../../utils/taskStorage';
 
 interface TaskItemProps {
   taskId: string;
@@ -14,7 +14,6 @@ interface TaskItemProps {
 const TaskItem: React.FC<TaskItemProps> = ({ taskId, onDelete }) => {
   const [taskStatus, setTaskStatus] = useState<TaskStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewImage, setPreviewImage] = useState<string>('');
   const [previewTitle, setPreviewTitle] = useState<string>('');
@@ -36,7 +35,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ taskId, onDelete }) => {
       
       // 如果任务完成，自动展开发票列表
       if (taskData.status === 'COMPLETED' && taskData.invoices && taskData.invoices.length > 0) {
-        setExpanded(true);
+        // setExpanded(true);
       }
     } catch (error: any) {
       console.error('查询任务状态失败，尝试从localStorage读取', error);
@@ -59,7 +58,7 @@ const TaskItem: React.FC<TaskItemProps> = ({ taskId, onDelete }) => {
           } as TaskStatusResponse);
           
           if (storedTask.status === 'COMPLETED' && storedTask.invoices && storedTask.invoices.length > 0) {
-            setExpanded(true);
+            // setExpanded(true);
           }
         } else {
           // 任务不存在

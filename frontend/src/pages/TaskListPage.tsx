@@ -6,7 +6,6 @@ import { getAllTasks, clearAllTasks, StoredTask } from '../utils/taskStorage';
 
 const TaskListPage: React.FC = () => {
   const [tasks, setTasks] = useState<StoredTask[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const loadTasks = () => {
     const storedTasks = getAllTasks();

@@ -145,3 +145,12 @@ export default ImageComparison;
 
 
 
+
+
+
+
+
+
+
+
+
