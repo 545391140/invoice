@@ -650,15 +650,26 @@ public class InvoiceService {
                 int y2 = bbox.get(3);
                 int maxCoord = Math.max(Math.max(x1, y1), Math.max(x2, y2));
                 
-                // 如果坐标范围在0-1005（允许一点点溢出），且满足以下任一条件，则识别为归一化坐标：
-                // 1. 图片尺寸较大（典型的大图归一化场景）
-                // 2. 坐标值已经超出了图片的实际像素边界（强有力的归一化证据）
-                if (maxCoord <= 1005 && (imageWidth > 1200 || imageHeight > 1200 || x2 > imageWidth || y2 > imageHeight)) {
+                // 判断是否为归一化坐标（0-1000范围）
+                // 条件1: 坐标在0-1005范围内（允许一点点溢出）
+                // 条件2: 满足以下任一情况：
+                //   a) 坐标超出图片边界（强烈证据）
+                //   b) 图片尺寸较大（>1200）且坐标明显小于图片尺寸（归一化坐标特征）
+                //   c) 坐标最大值接近1000（归一化坐标特征）
+                boolean isNormalized = maxCoord <= 1005 && (
+                    x2 > imageWidth || y2 > imageHeight ||  // 坐标越界
+                    (imageWidth > 1200 && imageHeight > 1200 && maxCoord < Math.min(imageWidth, imageHeight) * 0.8) ||  // 大图且坐标明显小于图片
+                    (maxCoord >= 900 && maxCoord <= 1005)  // 接近1000的归一化坐标
+                );
+                
+                if (isNormalized) {
+                    String reason = (x2 > imageWidth || y2 > imageHeight) ? "坐标越界" : 
+                                   (maxCoord >= 900) ? "接近1000的归一化坐标" : "大图归一化坐标";
                     log.info("检测到归一化坐标系统 (0-1000)，触发原因: {}，原始: {}, 图片尺寸: {}x{}", 
-                        (x2 > imageWidth || y2 > imageHeight) ? "坐标越界" : "大图识别",
-                        bbox, imageWidth, imageHeight);
+                        reason, bbox, imageWidth, imageHeight);
                     
-                    // 修正可能超出1000的坐标
+                    // 将0-1000范围的归一化坐标转换为实际像素坐标
+                    // 先归一化到0-1范围，再乘以实际图片尺寸
                     double normX1 = Math.max(0, Math.min(1000, x1)) / 1000.0;
                     double normY1 = Math.max(0, Math.min(1000, y1)) / 1000.0;
                     double normX2 = Math.max(0, Math.min(1000, x2)) / 1000.0;
@@ -672,9 +683,17 @@ public class InvoiceService {
                     );
                     
                     log.info("坐标缩放完成: 原始={} -> 归一化比例=[{},{},{},{}] -> 实际像素={}", 
-                        bbox, normX1, normY1, normX2, normY2, scaledBbox);
+                        bbox, 
+                        String.format("%.3f", normX1), String.format("%.3f", normY1),
+                        String.format("%.3f", normX2), String.format("%.3f", normY2),
+                        scaledBbox);
                     invoice.put("bbox", scaledBbox);
                 } else {
+                    // 验证像素坐标是否在合理范围内
+                    if (x1 < 0 || y1 < 0 || x2 > imageWidth * 1.1 || y2 > imageHeight * 1.1) {
+                        log.warn("像素坐标可能超出图片范围: bbox={}, 图片尺寸: {}x{}", 
+                            bbox, imageWidth, imageHeight);
+                    }
                     log.debug("识别为像素坐标: bbox={}, 图片尺寸: {}x{}", 
                         bbox, imageWidth, imageHeight);
                 }

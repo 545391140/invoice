@@ -180,13 +180,18 @@ public class ApiResponseParser {
     }
 
     private List<Integer> processRawCoordinates(double x1_raw, double y1_raw, double x2_raw, double y2_raw, String apiResponse) {
-        // 判定是否为比例坐标 (0-1)
-        boolean hasDecimalPoint = apiResponse.contains(".");
+        // 判定坐标类型：
+        // 1. 如果所有坐标都在 0-1 之间（归一化比例坐标），保持为归一化坐标，转换为 0-1000 范围以便后续处理
+        // 2. 如果坐标在 0-1000 范围，可能是归一化的像素坐标（相对于1000x1000的图片）
+        // 3. 如果坐标很大，可能是实际像素坐标
+        
         boolean allUnderOne = x1_raw <= 1.001 && y1_raw <= 1.001 && x2_raw <= 1.001 && y2_raw <= 1.001;
-        // 如果 x2 或 y2 大于 1，说明肯定是 0-1000 或像素坐标
-        boolean isFloatingPoint = (allUnderOne && (x2_raw > 0 || y2_raw > 0)) || (hasDecimalPoint && allUnderOne);
-
-        if (isFloatingPoint) {
+        boolean hasDecimalPoint = apiResponse.contains(".");
+        
+        // 如果坐标都在 0-1 之间，且是小数，说明是归一化比例坐标
+        // 转换为 0-1000 范围的归一化坐标，以便 normalizeBboxCoordinates 正确处理
+        if (allUnderOne && hasDecimalPoint && x1_raw > 0 && y1_raw > 0) {
+            // 归一化比例坐标 (0-1) -> 归一化像素坐标 (0-1000)
             return Arrays.asList(
                 (int) Math.round(x1_raw * 1000.0),
                 (int) Math.round(y1_raw * 1000.0),
@@ -194,7 +199,14 @@ public class ApiResponseParser {
                 (int) Math.round(y2_raw * 1000.0)
             );
         } else {
-            return Arrays.asList((int)x1_raw, (int)y1_raw, (int)x2_raw, (int)y2_raw);
+            // 直接使用原始坐标（可能是 0-1000 范围的归一化坐标，也可能是实际像素坐标）
+            // 后续由 normalizeBboxCoordinates 根据图片实际尺寸判断并转换
+            return Arrays.asList(
+                (int) Math.round(x1_raw), 
+                (int) Math.round(y1_raw), 
+                (int) Math.round(x2_raw), 
+                (int) Math.round(y2_raw)
+            );
         }
     }
 }
