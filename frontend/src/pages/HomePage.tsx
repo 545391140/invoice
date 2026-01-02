@@ -22,6 +22,14 @@ const HomePage: React.FC = () => {
     }
     
     const invoiceData = response.data;
+    
+    // 如果是异步任务提交成功，不需要在这里显示发票结果
+    if (invoiceData?.status === 'PROCESSING') {
+      console.log('异步任务已提交:', invoiceData.taskId);
+      setResult(null); // 清除上一次的结果
+      return;
+    }
+
     if (invoiceData?.invoices && invoiceData.invoices.length > 0) {
       console.log('设置结果，发票数量:', invoiceData.invoices.length);
       setResult(invoiceData);

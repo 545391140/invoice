@@ -14,8 +14,9 @@ spring:
       max-request-size: 50MB
 
 # 火山引擎配置
+# API Key 配置在 application-local.yml 中（不提交到版本控制）
 volcengine:
-  ark-api-key: ${ARK_API_KEY:}  # 优先使用环境变量，如果没有则使用 application-local.yml
+  # ark-api-key 从 application-local.yml 或环境变量 ARK_API_KEY 读取
   base-url: https://uniapi.ruijie.com.cn/v1
   model:
     name: doubao-seed-1-6-vision-250815

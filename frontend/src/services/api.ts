@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
 // 创建 axios 实例
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 120秒超时（API调用可能需要较长时间，特别是处理大文件或多页PDF时）
+  timeout: 300000, // 300秒（5分钟）超时（API调用可能需要较长时间，特别是处理大文件或多页PDF时，实际处理时间约140秒）
   // 不设置默认 Content-Type，让 axios 根据数据类型自动设置
 });
 
