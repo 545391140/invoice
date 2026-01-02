@@ -1,7 +1,8 @@
 server:
-  port: 8080
+  port: 3002
   servlet:
     context-path: /
+  forward-headers-strategy: native  # 解决 HTTPS 代理下的 Mixed Content 问题
 
 spring:
   application:

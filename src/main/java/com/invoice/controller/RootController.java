@@ -13,10 +13,10 @@ import java.util.Map;
 public class RootController {
     
     /**
-     * 根路径 - API 信息
+     * API 信息
      */
-    @GetMapping("/")
-    public ResponseEntity<ApiResponse<Object>> root() {
+    @GetMapping("/api/v1/info")
+    public ResponseEntity<ApiResponse<Object>> info() {
         Map<String, Object> info = new HashMap<>();
         info.put("service", "Invoice Auto Crop Service");
         info.put("version", "1.0.0");

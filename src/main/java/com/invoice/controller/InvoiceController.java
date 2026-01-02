@@ -54,28 +54,24 @@ public class InvoiceController {
             
             // 为每个发票添加预览URL和下载URL
             String taskId = response.getTaskId();
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes == null) {
-                throw new IllegalStateException("无法获取请求上下文");
-            }
-            HttpServletRequest request = attributes.getRequest();
-            String baseUrl = request.getScheme() + "://" + request.getServerName() 
-                + ":" + request.getServerPort() + "/api/v1/invoice";
+            
+            // 使用相对路径而非绝对路径，以避免在 HTTPS 代理下出现协议不匹配问题
+            String baseApiUrl = "/api/v1/invoice";
             
             response.getInvoices().forEach(invoice -> {
                 // 设置裁切后图片预览URL
                 String croppedPreviewUrl = String.format("%s/preview/cropped/%s", 
-                    baseUrl, invoice.getFilename());
+                    baseApiUrl, invoice.getFilename());
                 invoice.setImageUrl(croppedPreviewUrl);
                 
                 // 设置裁切后图片下载URL
                 String croppedDownloadUrl = String.format("%s/download/%s", 
-                    baseUrl, invoice.getFilename());
+                    baseApiUrl, invoice.getFilename());
                 invoice.setDownloadUrl(croppedDownloadUrl);
                 
                 // 设置原始图片预览URL
                 String originalPreviewUrl = String.format("%s/preview/original/%s?page=%d", 
-                    baseUrl, taskId, invoice.getPage());
+                    baseApiUrl, taskId, invoice.getPage());
                 invoice.setOriginalImageUrl(originalPreviewUrl);
             });
             
