@@ -2,20 +2,22 @@ package com.invoice.controller;
 
 import com.invoice.dto.ApiResponse;
 import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-@RestController
+@Controller
 public class RootController {
     
     /**
      * API 信息
      */
     @GetMapping("/api/v1/info")
+    @ResponseBody
     public ResponseEntity<ApiResponse<Object>> info() {
         Map<String, Object> info = new HashMap<>();
         info.put("service", "Invoice Auto Crop Service");
@@ -33,8 +35,14 @@ public class RootController {
         ));
         return ResponseEntity.ok(ApiResponse.success(info));
     }
+
+    /**
+     * 解决 SPA 页面刷新 404 问题
+     * 将所有非 API 且不带后缀的路径都重定向到 index.html
+     */
+    @GetMapping(value = {"/tasks", "/tasks/**"})
+    public String forward() {
+        // 返回 forward: 前缀，Spring 会执行内部转发
+        return "forward:/";
+    }
 }
-
-
-
-
