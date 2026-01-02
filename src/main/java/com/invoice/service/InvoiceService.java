@@ -4,6 +4,7 @@ import com.invoice.dto.InvoiceRecognizeResponse;
 import com.invoice.dto.TaskStatusResponse;
 import com.invoice.model.InvoiceInfo;
 import com.invoice.util.ApiResponseParser;
+import com.invoice.config.VolcengineConfig;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -46,6 +47,7 @@ public class InvoiceService {
     private final VolcengineApiService apiService;
     private final ImageCropService imageCropService;
     private final ApiResponseParser responseParser;
+    private final VolcengineConfig volcengineConfig;
     
     // 异步任务存储（生产环境应使用Redis或数据库）
     private final Map<String, TaskStatusResponse> taskStore = new ConcurrentHashMap<>();
@@ -61,7 +63,8 @@ public class InvoiceService {
             PdfProcessor pdfProcessor,
             VolcengineApiService apiService,
             ImageCropService imageCropService,
-            ApiResponseParser responseParser) {
+            ApiResponseParser responseParser,
+            VolcengineConfig volcengineConfig) {
         
         this.originalStorageLocation = Paths.get(uploadFolder, "original").toAbsolutePath().normalize();
         this.croppedStorageLocation = Paths.get(outputFolder).toAbsolutePath().normalize();
@@ -71,6 +74,7 @@ public class InvoiceService {
         this.apiService = apiService;
         this.imageCropService = imageCropService;
         this.responseParser = responseParser;
+        this.volcengineConfig = volcengineConfig;
         
         try {
             Files.createDirectories(this.originalStorageLocation);
@@ -179,6 +183,21 @@ public class InvoiceService {
                             // 解析API响应
                             List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse, page);
                             
+                            // AI 自我校验逻辑
+                            if (volcengineConfig.isEnableSelfVerify() && !invoices.isEmpty()) {
+                                log.info("本地环境已开启第 {} 页 AI 自我校验...", page);
+                                for (Map<String, Object> invoice : invoices) {
+                                    try {
+                                        @SuppressWarnings("unchecked")
+                                        List<Integer> oldBbox = (List<Integer>) invoice.get("bbox");
+                                        List<Integer> refinedBbox = apiService.selfVerifyBbox(tempImagePath, oldBbox);
+                                        invoice.put("bbox", refinedBbox);
+                                    } catch (Exception e) {
+                                        log.warn("第 {} 页 AI 自我校验执行失败: {}", page, e.getMessage());
+                                    }
+                                }
+                            }
+                            
                             // 检查并缩放坐标
                             normalizeBboxCoordinates(invoices, page, imageWidth, imageHeight);
                             
@@ -250,6 +269,21 @@ public class InvoiceService {
                 
                 // 解析API响应
                 List<Map<String, Object>> invoices = responseParser.parseApiResponse(apiResponse, 1);
+                
+                // AI 自我校验逻辑
+                if (volcengineConfig.isEnableSelfVerify() && !invoices.isEmpty()) {
+                    log.info("本地环境已开启 AI 自我校验...");
+                    for (Map<String, Object> invoice : invoices) {
+                        try {
+                            @SuppressWarnings("unchecked")
+                            List<Integer> oldBbox = (List<Integer>) invoice.get("bbox");
+                            List<Integer> refinedBbox = apiService.selfVerifyBbox(tempImagePath, oldBbox);
+                            invoice.put("bbox", refinedBbox);
+                        } catch (Exception e) {
+                            log.warn("AI 自我校验执行失败，跳过: {}", e.getMessage());
+                        }
+                    }
+                }
                 
                 // 进度更新到 50%
                 if (taskStatus != null) {

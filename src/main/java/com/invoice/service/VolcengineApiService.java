@@ -26,20 +26,25 @@ public class VolcengineApiService {
     private final ObjectMapper objectMapper;
     
     private static final String DEFAULT_PROMPT = 
-        "请识别图片中所有发票或收据的位置。\n" +
-        "重要提示：视觉模型在预测边界框时必须极其精确，特别要注意包含发票的四个边缘，确保内容 100% 完整。\n" +
-        "边界框必须：\n" +
-        "1. 【顶部关键】：必须从发票最顶端的 Logo、商店名称或任何标题文字开始。宁愿在上方多包含 5% 的空白，也绝对不能切断顶部的文字。\n" +
-        "2. 【右侧关键】：必须完整包含发票右侧的所有文字、数字和金额边缘。预测 x2（右边界）时要稍微向右偏移，确保不切断任何最右边的字符。\n" +
-        "3. 【底部关键】：必须延伸到发票最底部的最后一行文字（如总计、日期、流水号、广告语或 CamScanner 扫描水印上方）。\n" +
-        "4. 【左侧关键】：紧贴左侧边缘，包含所有侧边文字。\n" +
-        "严格禁止：\n" +
-        "- 禁止返回整张图片的坐标 [0, 0, 1000, 1000]\n" +
-        "- 如果发票明显只占据图片的一部分，不要返回接近整图的坐标，除非它确实占据了全宽或全高\n" +
-        "对于每张发票，请识别其商家名称，并严格按此格式返回：\n" +
+        "你是发票识别专家。请识别图片中所有发票或收据的位置，并返回边界框坐标。\n" +
+        "【核心原则：宽松优先，绝不切边】\n" +
+        "在预测边界框时，必须遵循「宁多勿少」原则。包含稍许背景比切断内容好一万倍。\n" +
+        "【右侧边缘 - 特别注意】\n" +
+        "右边界（x2）必须完整包含：\n" +
+        "- 主要金额数字的最后一位和货币符号\n" +
+        "- 侧边的订单号、编号、注释等小字\n" +
+        "- 右侧可能存在的竖排文字或装饰线\n" +
+        "▶ 建议：在你初步判断的 x2 基础上，再向右加 30-50 个归一化单位作为安全余量。\n" +
+        "【顶部边缘 - 特别注意】\n" +
+        "顶边（y1）必须完整包含：\n" +
+        "- 商店 Logo 或品牌标识的最顶端\n" +
+        "- 标题文字的最上方\n" +
+        "- 顶部装饰线或横条\n" +
+        "▶ 建议：在你初步判断的 y1 基础上，再向上减 20-30 个归一化单位。\n" +
+        "【输出格式】\n" +
         "商家名称 发票：<bbox>x1 y1 x2 y2</bbox>\n" +
         "使用归一化坐标 (0-1000)。\n" +
-        "警告：如果你的 x2 或 y1 坐标设置得太紧，导致切掉了发票边缘的任何文字或 Logo，将被视为严重错误。";
+        "严禁输出整图坐标 [0, 0, 1000, 1000]，除非发票真的占满全图。";
     
     @Autowired
     public VolcengineApiService(VolcengineConfig config) {
@@ -97,6 +102,7 @@ public class VolcengineApiService {
             // 构建 OpenAI 格式的请求
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("model", modelName);
+            requestBody.put("temperature", 0.0); // 设置温度为0，减少识别结果的随机性
             
             List<Map<String, Object>> messages = new ArrayList<>();
             Map<String, Object> userMessage = new HashMap<>();
@@ -150,6 +156,31 @@ public class VolcengineApiService {
             log.error("API 调用异常: {}", e.getMessage(), e);
             throw e;
         }
+    }
+
+    /**
+     * AI 自我校验：检查识别结果并进行修正
+     */
+    public List<Integer> selfVerifyBbox(String originalImagePath, List<Integer> bbox) throws Exception {
+        log.info("执行 AI 自我校验，原始 bbox: {}", bbox);
+        String verifyPrompt = String.format(
+            "请作为校验员复核该发票范围：\n" +
+            "当前范围是 %s (归一化坐标 0-1000)。\n" +
+            "重点检查：右侧金额是否完整？顶部Logo是否被切？\n" +
+            "如果发现切断，请给出一个更宽大的 bbox 确保 100%% 完整。\n" +
+            "格式：<bbox>x1 y1 x2 y2</bbox>", bbox.toString());
+        
+        String response = callVolcengineVisionApi(originalImagePath, verifyPrompt, 1);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("<bbox>\\s*([\\d.]+)[,\\s]+([\\d.]+)[,\\s]+([\\d.]+)[,\\s]+([\\d.]+)\\s*</bbox>").matcher(response);
+        if (m.find()) {
+            return Arrays.asList(
+                (int) Math.round(Double.parseDouble(m.group(1))),
+                (int) Math.round(Double.parseDouble(m.group(2))),
+                (int) Math.round(Double.parseDouble(m.group(3))),
+                (int) Math.round(Double.parseDouble(m.group(4)))
+            );
+        }
+        return bbox;
     }
 }
 

@@ -11,6 +11,7 @@ public class VolcengineConfig {
     private String arkApiKey;
     private String baseUrl = "https://uniapi.ruijie.com.cn/v1";
     private ModelConfig model = new ModelConfig();
+    private boolean enableSelfVerify = false;
 
     public String getArkApiKey() {
         // 优先从环境变量读取
